@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>range getClientRects bug</title>
+    </head>
+    <body>
+        <div>
+        Compare and contrast the highlighted rectangles across different browsers.<br><br>
+        The highlighted rectangles are drawn based on the value returned from `range.getClientRects()` (see page source for details).<br><br>
+        Chrome, Safari and Firefox are consistent in that the line-height does not affect the rectangle height. <strong>Edge is the odd one out in that the line-height does affect the rectangle height</strong>.<br><br>
+        For questions or comments please contact mark.buer@booktrack.com<br><br>
+        </div>
+        <div>X</div>
+        <div class="applyRectsToTextNode">Here is some text with standard line-height.</div>
+        <div>X</div>
+        <div style="line-height: 0.5" class="applyRectsToTextNode">And here is some text with smaller line-height.</div>
+        <div>X</div>
+        <div style="line-height: 2.0" class="applyRectsToTextNode">And yet more text, this time with larger line-height.</div>
+        <div>X</div>
+        <div style="line-height: 4.0" id="helloWorld">For this massive line-height, we only highlight the phrase "hello world", for variety.</div>
+        <div>X</div>
+
+        <script type="text/javascript">
+
+function highlight(rects) {
+    // This is more complicated than necessary as it was copy/pasted from another similar internal demo
+    for (var i = 0, n = rects.length; i < n; i++) {
+        var rect = rects[i];
+        var div = document.createElement("div");
+        var style = div.style;
+        style.left = rect.left + "px";
+        style.top = rect.top + "px";
+        style.width = rect.width + "px";
+        style.height = rect.height + "px";
+        style.position = "absolute";
+        var angle = i * 360 / n;
+        style.backgroundColor = "hsla(" + angle + ", 100%, 50%, 0.6)";
+        document.body.appendChild(div);
+    }
+}
+
+let elements = document.querySelectorAll(".applyRectsToTextNode");
+for (let i = 0, n = elements.length; i < n; i++) {
+    let element = elements[i];
+    let textNode = element.firstChild;
+    let range = document.createRange();
+    range.setStartBefore(textNode);
+    range.setEndAfter(textNode);
+    highlight(range.getClientRects());
+}
+
+let helloWorldTextNode = document.querySelector("#helloWorld").firstChild;
+let searchTerm = '"hello world"';
+let searchTermLocation = helloWorldTextNode.textContent.indexOf(searchTerm);
+let range = document.createRange();
+range.setStart(helloWorldTextNode, searchTermLocation);
+range.setEnd(helloWorldTextNode, searchTermLocation + searchTerm.length);
+highlight(range.getClientRects());
+
+
+        </script>
+    </body>
+</html>
