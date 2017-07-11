@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>caretRangeFromPoint in iframe</title>
+        <style type="text/css">
+#intro {
+    margin: 20px;
+    line-height: 1.5;
+}
+#coveredIframeResults > div {
+    margin: 5px 20px;
+}
+#uncoveredIframeResults > div {
+    margin: 5px 20px;
+}
+.passed::after {
+    margin-left: 10px;
+    content: 'passed';
+    background-color: lightgreen;
+}
+.failed::after {
+    margin-left: 10px;
+    content: 'failed';
+    background-color: red;
+}
+#container {
+    width: 400px;
+    height: 160px;
+    position: relative;
+}
+iframe {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    position: absolute;
+}
+#overlay {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    position: absolute;
+}
+        </style>
+    </head>
+    <body>
+        <div id="intro">Tests the browsers ability to use the caretRangeFromPoint (or caretPositionFromPoint) function with iframed content that is covered by an empty div.<br>
+        Compare and contrast the results of these tests across different browsers (passes on Chrome, Safari and Firefox but fails on Edge).<br>
+        For questions or comments please contact mark.buer@booktrack.com
+        </div>
+
+        <h2>caretRangeFromPoint with covered iframe</h2>
+        <div id="container">
+            <div id="coveredIframePlaceholder"></div>
+            <div id="overlay"></div>
+        </div>
+        <div id="coveredIframeResults"></div>
+
+        <h2>caretRangeFromPoint with uncovered iframe</h2>
+        <div id="container">
+            <div id="uncoveredIframePlaceholder"></div>
+        </div>
+        <div id="uncoveredIframeResults"></div>
+
+        <script type="text/javascript">
+
+function runTests(logger, iframePlaceholder) {
+    var iframe;
+    var loadTimeoutHandle;
+    var iframePlaceholder;
+
+    iframe = document.createElement('iframe');
+
+    iframePlaceholder.parentElement.replaceChild(iframe, iframePlaceholder);
+    iframe.onload = function() {
+        clearTimeout(loadTimeoutHandle);
+        runLoadedTests(iframe, logger);
+        logger.okay('DONE');
+    };
+    iframe.src = "iframe-content.html";
+
+    loadTimeoutHandle = setTimeout(function() {
+        logger.fail('iframe load timed out');
+    }, 1000);
+}
+
+function runLoadedTests(iframe, logger) {
+    var contentDocument;
+    var body;
+
+    logger.attempt('iframe.contentDocument can be accessed', function() {
+        contentDocument = iframe.contentDocument;
+    });
+
+    logger.attempt('iframe.contentDocument exists', function() {
+        if (!contentDocument) {
+            throw new Error();
+        }
+    });
+
+    body = iframe.contentDocument.body;
+    logger.attempt('iframe.contentDocument.body is not empty', function() {
+        if (!body || !body.childNodes || body.childNodes.length === 0) {
+            throw new Error();
+        }
+    });
+
+    logger.attempt('iframe.contentDocument.elementFromPoint(0, 0) returns an element', function() {
+        var element = iframe.contentDocument.elementFromPoint(0, 0);
+
+        if (!element) {
+            throw new Error();
+        }
+    });
+
+    if (iframe.contentDocument.caretRangeFromPoint) {
+        logger.attempt('iframe.contentDocument.caretRangeFromPoint(0, 0) returns a range', function() {
+            var rangeOrCaretPosition = iframe.contentDocument.caretRangeFromPoint(0, 0);
+
+            if (!rangeOrCaretPosition) {
+                throw new Error();
+            }
+        });
+    } else {
+        // Firefox
+        logger.attempt('iframe.contentDocument.caretPositionFromPoint(0, 0) returns a range', function() {
+            var rangeOrCaretPosition = iframe.contentDocument.caretPositionFromPoint(0, 0);
+
+            if (!rangeOrCaretPosition) {
+                throw new Error();
+            }
+        });
+    }
+}
+
+
+function Logger(destinationElement) {
+    this._destinationElement = destinationElement;
+}
+Logger.prototype.attempt = function(message, fn) {
+    var passthrough;
+    var messageElement = document.createElement('div');
+    messageElement.textContent = 'asserting ' + message + '...';
+    this._destinationElement.appendChild(messageElement);
+    try {
+        passthrough = fn();
+        messageElement.className = 'passed';
+    } catch (e) {
+        messageElement.className = 'failed';
+        throw e;
+    }
+    return passthrough;
+};
+Logger.prototype.fail = function(message) {
+    var messageElement = document.createElement('div');
+    messageElement.textContent = message;
+    messageElement.className = 'failed';
+    this._destinationElement.appendChild(messageElement);
+};
+Logger.prototype.okay = function(message) {
+    var messageElement = document.createElement('div');
+    messageElement.textContent = message;
+    messageElement.className = 'passed';
+    this._destinationElement.appendChild(messageElement);
+};
+
+
+try {
+    runTests(new Logger(document.getElementById('coveredIframeResults')), document.getElementById('coveredIframePlaceholder'));
+} catch (e) {
+    console.error(e);
+}
+
+try {
+    runTests(new Logger(document.getElementById('uncoveredIframeResults')), document.getElementById('uncoveredIframePlaceholder'));
+} catch (e) {
+    console.error(e);
+}
+
+        </script>
+    </body>
+</html>
