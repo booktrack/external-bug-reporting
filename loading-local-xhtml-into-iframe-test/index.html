@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>iframe loading test</title>
+        <style type="text/css">
+#intro {
+    margin: 20px;
+    line-height: 1.5;
+}
+#blobUrlLoadResults > div {
+    margin: 5px 20px;
+}
+#dataUriLoadResults > div {
+    margin: 5px 20px;
+}
+#srcdocLoadResults > div {
+    margin: 5px 20px;
+}
+.passed::after {
+    margin-left: 10px;
+    content: 'passed';
+    background-color: lightgreen;
+}
+.failed::after {
+    margin-left: 10px;
+    content: 'failed';
+    background-color: red;
+}
+iframe {
+    visibility: collapse;
+}
+        </style>
+    </head>
+    <body>
+        <div id="intro">Tests the browsers ability to load xhtml into an iframe via differing techniques.<br>
+        Compare and contrast the results of these tests across different browsers.<br>
+        For questions or comments please contact mark.buer@booktrack.com
+        </div>
+        <h2>Loading xhtml into an iframe via a blob url</h2>
+        <div id="blobUrlLoadResults"></div>
+        <h2>Loading xhtml into an iframe via a data uri</h2>
+        <div id="dataUriLoadResults"></div>
+        <h2>Loading xhtml into an iframe via srcdoc</h2>
+        <div id="srcdocLoadResults"></div>
+        <script type="text/javascript">
+
+// Some XHTML content, carefully crafted to produce a different DOM when mistakenly parsed as HTML instead of XHTML
+var content = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">',
+    '<html xmlns="http://www.w3.org/1999/xhtml">',
+    '<head>',
+    '<title>Test content</title>',
+    '</head>',
+    '<body><p><a/><span>DummyText</span></p></body>',
+    '</html>'
+].join('\n');
+
+
+
+// Add an iframe onto the page and load some xhtml into it using a blob url
+function blobUrlTest(logger) {
+    var blob;
+    var url;
+    var iframe;
+    var loadTimeoutHandle;
+
+    logger.attempt('can create new blob', function() {
+        blob = new Blob([content], { type: 'application/xhtml+xml' });
+    });
+
+    logger.attempt('can create object url from blob', function() {
+        url = URL.createObjectURL(blob);
+    });
+
+    iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    iframe.onload = function() {
+        clearTimeout(loadTimeoutHandle);
+        validateParsedDom(iframe, logger);
+        logger.okay('DONE');
+    };
+
+    logger.attempt('can assign object url to iframe.src', function() {
+        iframe.src = url;
+    });
+
+    loadTimeoutHandle = setTimeout(function() {
+        logger.fail('iframe load timed out');
+    }, 1000);
+}
+
+// Add an iframe onto the page and load some xhtml into it using a data uri
+function dataUriTest(logger) {
+    var dataUri;
+    var iframe;
+    var loadTimeoutHandle;
+
+    logger.attempt('can create the base64 data uri', function() {
+        // Using a data URI - being aware of encoding issues
+        // See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Base64_encoding_and_decoding
+        // and https://developer.mozilla.org/en/docs/data_URIs
+        var utf8Srcdoc = unescape(encodeURIComponent(content));
+        var base64Srcdoc = btoa(utf8Srcdoc);
+        dataUri = 'data:application/xhtml+xml;charset=utf8;base64,' + base64Srcdoc;
+    });
+
+    iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    iframe.onload = function() {
+        clearTimeout(loadTimeoutHandle);
+        validateParsedDom(iframe, logger);
+        logger.okay('DONE');
+    };
+
+    logger.attempt('can assign data uri to iframe.src', function() {
+        iframe.src = dataUri;
+    });
+
+    loadTimeoutHandle = setTimeout(function() {
+        logger.fail('iframe load timed out');
+    }, 1000);
+}
+
+// Add an iframe onto the page and load some xhtml into it using srcdoc
+function srcdocTest(logger) {
+    var iframe;
+    var loadTimeoutHandle;
+
+    iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    iframe.onload = function() {
+        clearTimeout(loadTimeoutHandle);
+        validateParsedDom(iframe, logger);
+        logger.okay('DONE');
+    };
+
+    logger.attempt('has iframe.srcdoc', function() {
+        if (typeof iframe.srcdoc === "undefined") {
+            throw new Error();
+        }
+    });
+
+    logger.attempt('can assign document source to iframe.srcdoc', function() {
+        iframe.srcdoc = content;
+    });
+
+    loadTimeoutHandle = setTimeout(function() {
+        logger.fail('iframe load timed out');
+    }, 1000);
+}
+
+
+// Ensure the content was parsed as XHTML and not HTML, and that the content document is accessible
+function validateParsedDom(iframe, logger) {
+    var contentDocument;
+    var body;
+
+    logger.attempt('iframe.contentDocument can be accessed', function() {
+        contentDocument = iframe.contentDocument;
+    });
+
+    logger.attempt('iframe.contentDocument exists', function() {
+        if (!contentDocument) {
+            throw new Error();
+        }
+    });
+
+    body = iframe.contentDocument.body;
+    logger.attempt('iframe.contentDocument.body is not empty', function() {
+        if (!body || !body.childNodes || body.childNodes.length === 0) {
+            throw new Error();
+        }
+    });
+
+    logger.attempt('iframe.contentDocument.body has expected structure', function() {
+        assertDom(iframe.contentDocument.body, {
+            nodeName: 'body',
+            children: [
+                {
+                    nodeName: 'p',
+                    children: [
+                        {
+                            nodeName: 'a'
+                        },
+                        {
+                            nodeName: 'span',
+                            children: [
+                                {
+                                    nodeValue: 'DummyText'
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+    });
+}
+
+function assertDom(actualNode, expectedNodeDetails) {
+    var i;
+
+    if (typeof expectedNodeDetails.nodeName === 'string' && expectedNodeDetails.nodeName !== actualNode.nodeName) {
+        throw new Error('nodeName mismatch');
+    }
+    if (typeof expectedNodeDetails.nodeValue === 'string' && expectedNodeDetails.nodeValue !== actualNode.nodeValue) {
+        throw new Error('nodeValue mismatch');
+    }
+    if (expectedNodeDetails.children) {
+        if (expectedNodeDetails.children.length !== actualNode.childNodes.length) {
+            throw new Error('child count mismatch');
+        }
+        for (i = 0; i < expectedNodeDetails.children.length; i++) {
+            assertDom(actualNode.childNodes[i], expectedNodeDetails.children[i]);
+        }
+    } else {
+        if (actualNode.childNodes.length) {
+            throw new Error('child count mismatch');
+        }
+    }
+}
+
+
+function Logger(destinationElement) {
+    this._destinationElement = destinationElement;
+}
+Logger.prototype.attempt = function(message, fn) {
+    var passthrough;
+    var messageElement = document.createElement('div');
+    messageElement.textContent = 'asserting ' + message + '...';
+    this._destinationElement.appendChild(messageElement);
+    try {
+        passthrough = fn();
+        messageElement.className = 'passed';
+    } catch (e) {
+        messageElement.className = 'failed';
+        throw e;
+    }
+    return passthrough;
+};
+Logger.prototype.fail = function(message) {
+    var messageElement = document.createElement('div');
+    messageElement.textContent = message;
+    messageElement.className = 'failed';
+    this._destinationElement.appendChild(messageElement);
+};
+Logger.prototype.okay = function(message) {
+    var messageElement = document.createElement('div');
+    messageElement.textContent = message;
+    messageElement.className = 'passed';
+    this._destinationElement.appendChild(messageElement);
+};
+
+try {
+    blobUrlTest(new Logger(document.getElementById('blobUrlLoadResults')));
+} catch (e) {
+    console.error(e);
+}
+try {
+    dataUriTest(new Logger(document.getElementById('dataUriLoadResults')));
+} catch (e) {
+    console.error(e);
+}
+try {
+    srcdocTest(new Logger(document.getElementById('srcdocLoadResults')));
+} catch (e) {
+    console.error(e);
+}
+
+        </script>
+    </body>
+</html>
